@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import tts
 import tkinter as Tk
 import tkinter.ttk as ttk
@@ -137,7 +138,7 @@ class TTS_MANAGER:
     self.file_store={}
     i=0
     for (name,number) in data:
-      self.file_list_box.insert(Tk.END,"%s (%s)\n" % (name,number))
+      self.file_list_box.insert(Tk.END,"%s (%s)" % (name,number))
       self.file_store[i]=number
       i+=1
 

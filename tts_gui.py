@@ -94,6 +94,9 @@ class TTS_GUI:
     self.details_list.insert(Tk.END,self.list_sb.save)
     self.details_list.config(state=Tk.DISABLED)
 
+  def populate_manage_frame(self,frame):
+    pass 
+
   def populate_list_frame(self,frame):
     self.list_sb=SaveBrowser(frame,self.filesystem)
     self.list_sb.bind("<<SelectionChange>>",self.update_list_frame_details)
@@ -256,12 +259,6 @@ class TTS_GUI:
     self.preferences=preferences_dialog.preferences
     self.reload_filesystem()
 
-  def reload_filesystem(self):
-    if self.preferences.locationIsUser:
-      self.filesystem=tts.get_default_fs()
-    else:
-      self.filesystem=tts.filesystem.FileSystem(tts_install_path=self.preferences.TTSLocation)
-
   def __init__(self,root):
     self.log=tts.logger()
     self.log.setLevel(logging.WARN)
@@ -276,8 +273,10 @@ class TTS_GUI:
       messagebox.showwarning("TTS Manager","Invalid preferences detected.\nOpening preferences pane.")
       self.showPreferences()
 
-    self.reload_filesystem()
+    self.filesystem=self.preferences.get_filesystem()
     mode_notebook = ttk.Notebook(root)
+    manage_frame = ttk.Frame(mode_notebook)
+    self.populate_manage_frame(manage_frame)
     list_frame = ttk.Frame(mode_notebook)
     self.populate_list_frame(list_frame)
     export_frame = ttk.Frame(mode_notebook)
@@ -287,6 +286,7 @@ class TTS_GUI:
     download_frame = ttk.Frame(mode_notebook)
     self.populate_download_frame(download_frame)
 
+    mode_notebook.add(manage_frame,text="Manage")
     mode_notebook.add(list_frame,text="List")
     mode_notebook.add(export_frame,text="Export")
     mode_notebook.add(import_frame,text="Import")

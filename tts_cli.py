@@ -231,7 +231,10 @@ class TTS_CLI:
                   filesystem=self.filesystem)
     if not save.isInstalled:
       if not args.download:
-        return 1, "Unable to find all urls required by %s. Rerun with -d to try and download them or open it within TTS.\n%s" % (args.id,save)
+          if not args.force:
+            return 1, "Unable to find all urls required by %s. Rerun with -d to try and download them or open it within TTS.\n%s" % (args.id,save)
+          else:
+            print(f"WARN: Unable to find all urls required by {args.id}. Force option provided, proceeding anyway.")
       else:
         tts.logger().info("Downloading missing files...")
         successful = save.download()

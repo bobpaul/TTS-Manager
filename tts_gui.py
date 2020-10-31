@@ -212,7 +212,7 @@ class TTS_GUI:
 
   def download(self):
     if not self.download_sb.save:
-      tts.logger().warn("Internal error: no save when attempting to download")
+      tts.logger().error("Internal error: no save when attempting to download")
       messagebox.showinfo("TTS Manager","Download failed (see log).")
       return
     if self.download_sb.save.download():

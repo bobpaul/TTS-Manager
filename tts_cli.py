@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import tts
+from tts.preferences import ModSaveLocation
 import argparse
 import os.path
 import sys
@@ -81,7 +82,8 @@ class TTS_CLI:
     parser_config_reset.set_defaults(func=self.do_config_reset)
     parser_config_set = subparsers_config.add_parser('set',help='Set configuration parameters.')
     parser_config_set.set_defaults(func=self.do_config_set)
-    parser_config_set.add_argument("-m","--mod_location",choices=['documents','gamedata'],help="Where mods are stored.")
+    valid_mod_locations = [ e.name.lower() for e in ModSaveLocation]
+    parser_config_set.add_argument("-m","--mod_location",choices=valid_mod_locations,help="Where mods are stored.")
     parser_config_set.add_argument("-t","--tts_location",help="TTS Install directory")
 
     args = parser.parse_args()
@@ -117,10 +119,18 @@ class TTS_CLI:
     sys.exit(rc)
 
   def do_config_set(self,args):
-    if args.mod_location:
-      self.preferences.locationIsUser = args.mod_location=='documents'
+    mod_location = args.mod_location
+    if mod_location:
+      valid_mod_locations = [ e.name.lower() for e in ModSaveLocation]
+      if mod_location in valid_mod_locations:
+        self.preferences.modSavePref = ModSaveLocation(valid_mod_locations.index(mod_location))
+      else:
+        tts.logger().error(f'Invalid option {mod_location}. Valid options are: {", ".join(valid_mod_locations)}')
+        return 1, "Read the help, dummy"
+
     if args.tts_location:
-      self.preferences.TTSLocation=args.mod_location
+      self.preferences.TTSLocation=args.tts_location
+
     self.preferences.save()
     return 0,"Preferences set"
 

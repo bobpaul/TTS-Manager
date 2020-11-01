@@ -6,6 +6,12 @@ import tkinter.messagebox as messagebox
 import tts
 import platform
 import os
+from enum import Enum
+
+class ModSaveLocation(Enum):
+    Documents = 0
+    GameData = 1
+    Auto = 2
 
 if platform.system() == 'Windows':
   import winreg
@@ -27,22 +33,55 @@ class Preferences(object):
 
   def __init__(self):
     self.changed=False
-    self._locationIsUser = True
+    self._modSavePref=ModSaveLocation.Auto
     self._TTSLocation = ''
-    self._defaultSaveLocation = ''
-    self._firstRun = False
+    self._firstRun = True
     #child class must initialize these properly (load from disk or assign defaults)
 
   @property
   def locationIsUser(self):
-    return self._locationIsUser
+    """Returns True if the data location is the user's Documents\My Games folder
+
+    if the configuration is set to auto, this checks the TTS setting
+    """
+    tts.logger().warn('Reading from locationIsUser is deprecated')
+    return self.modSaveLocation() == ModSaveLocation.Documents
 
   @locationIsUser.setter
-  def locationIsUser(self,value):
-    if self._locationIsUser==bool(value):
-      return
-    self._locationIsUser=bool(value)
-    self.changed=True
+  def locationIsUser(self, value):
+    tts.logger().warn('Writing to locationIsUser is deprecated')
+    if isinstance(value, int) or isinstance(value, str) or isinstance(value, ModSaveLocation):
+      self.modSavePref = value
+    elif isinstance(value, bool):
+      self.modSavePref = 'Documents' if value else 'Auto'
+
+  def modSaveLocation(self) -> ModSaveLocation:
+    """Returns the mod location. If the preference is set to auto
+       this returns the setting found in the TTS game preferences"""
+    if self.modSavePref == ModSaveLocation.Auto:
+      return tts.get_modlocation_linux()
+    else:
+      return self.modSavePref
+
+  @property
+  def modSavePref(self) -> ModSaveLocation:
+    return self._modSavePref
+
+  @modSavePref.setter
+  def modSavePref(self, value):
+    modSetting = self._modSavePref
+    if isinstance(value, str):
+      modSetting = ModSaveLocation[value]
+    elif isinstance(value,int):
+      modSetting = ModSaveLocation(value)
+    elif isinstance(value, ModSaveLocation):
+      modSetting = value
+    else:
+      tts.logger().error(f'Invalid modSavePref: {value}')
+    if modSetting != self._modSavePref:
+      self.changed=True
+      self._modSavePref = modSetting
+    assert(isinstance(self._modSavePref, ModSaveLocation))
 
   @property
   def TTSLocation(self):
@@ -57,17 +96,6 @@ class Preferences(object):
     self.changed=True
 
   @property
-  def defaultSaveLocation(self):
-    return self._defaultSaveLocation
-
-  @defaultSaveLocation.setter
-  def defaultSaveLocation(self,value):
-    if self._defaultSaveLocation==value:
-      return
-    self._defaultSaveLocation=value
-    self.changed=True
-
-  @property
   def firstRun(self):
     return self._firstRun
 
@@ -79,10 +107,9 @@ class Preferences(object):
     self.changed=True
 
   def reset(self):
-    self._locationIsUser=True
-    self._firstRun=1
-    self._defaultSaveLocation=""
-    self._TTSLocation=""
+    self.modSavePref=ModSaveLocation.Auto
+    self.firstRun=1
+    self.TTSLocation=""
     #child class must delete values from disk storage
 
   def save(self):
@@ -94,16 +121,17 @@ class Preferences(object):
     return self.get_filesystem().check_dirs()
 
   def get_filesystem(self):
-    if self.locationIsUser:
+    if self.modSaveLocation().name == 'Documents':
       return tts.get_default_fs()
+    if not os.path.isdir(self.TTSLocation):
+      tts.logger().error(f'Mods are in GameData but TTS Install Location is invalid: "{self.TTSLocation}"')
     return tts.filesystem.FileSystem(tts_install_path=self.TTSLocation)
 
   def __str__(self):
     return f"""Preferences:
-locationIsUser: {self.locationIsUser}
+modSavePref: {self.modSavePref.name}
 TTSLocation: {self.TTSLocation}
-DefaultSaveLocation: {self.defaultSaveLocation}
-firstRun: {self.firstRun}"""
+firstRun: {self.firstRun}""".format()
 
 
 class PreferencesWin(Preferences):
@@ -113,36 +141,46 @@ class PreferencesWin(Preferences):
     self._connection=winreg.ConnectRegistry(None,winreg.HKEY_CURRENT_USER)
     self._registry=winreg.CreateKeyEx( self._connection, "Software\TTS Manager",0,winreg.KEY_ALL_ACCESS )
     try:
-      self._locationIsUser="True"==winreg.QueryValueEx(self._registry,"locationIsUser")[0]
-    except FileNotFoundError as e:
-      self._locationIsUser=True
+      self.modSavePref = ModSaveLocation[ winreg.QueryValueEx(self._registry,"modSavePref")[0] ]
+    except:
+      try:
+        self.modSavePref = ModSaveLocation.Documents if "True"==winreg.QueryValueEx(self._registry,"locationIsUser")[0] else ModSaveLocation.Auto
+      except:
+        pass
     try:
       self._TTSLocation=os.path.normpath( winreg.QueryValueEx(self._registry,"TTSLocation")[0] )
-    except FileNotFoundError as e:
-      self._TTSLocation=""
-    try:
-      self._defaultSaveLocation=winreg.QueryValueEx(self._registry,"defaultSaveLocation")[0]
-    except FileNotFoundError as e:
-      self._defaultSaveLocation=""
+    except:
+      pass
     try:
       self._firstRun="True"==winreg.QueryValueEx(self._registry,"firstRun")[0]
-    except FileNotFoundError as e:
-      self._firstRun=True
+    except:
+      pass
 
   def reset(self):
     super().reset()
-    winreg.DeleteValue(self._registry,"locationIsUser")
+    winreg.DeleteValue(self._registry,"modSavePref")
     winreg.DeleteValue(self._registry,"TTSLocation")
-    winreg.DeleteValue(self._registry,"defaultSaveLocation")
     winreg.DeleteValue(self._registry,"firstRun")
+    try:
+      winreg.DeleteValue(key, 'locationIsUser')
+    except:
+      pass
 
   def save(self):
     super().save()
     # Make sure all values have been createds
-    winreg.SetValueEx(self._registry,"locationIsUser",0,winreg.REG_SZ,str(self.locationIsUser))
+    winreg.SetValueEx(self._registry,"modSavePref",0,winreg.REG_SZ,str(self.modSavePref.name))
     winreg.SetValueEx(self._registry,"TTSLocation",0,winreg.REG_SZ,str(self.TTSLocation))
-    winreg.SetValueEx(self._registry,"defaultSaveLocation",0,winreg.REG_SZ,str(self.defaultSaveLocation))
-    winreg.SetValueEx(self._registry,"firstRun",0,winreg.REG_SZ,str(self._firstRun))
+    winreg.SetValueEx(self._registry,"firstRun",0,winreg.REG_SZ,str(self.firstRun))
+    #remove deprecated keys
+    try:
+      winreg.DeleteValue(self._registry, 'locationIsUser')
+    except:
+      pass
+    try:
+      winreg.DeleteValue(self._registry,"defaultSaveLocation")
+    except:
+      pass
 
 
 class PreferencesLinux(Preferences):
@@ -151,51 +189,58 @@ class PreferencesLinux(Preferences):
     super().__init__()
     self._conffile = os.path.join(xdgappdirs.user_config_dir(),'tts_manager.ini')
     self._config = configparser.ConfigParser(allow_no_value=True)
-    self._config['main'] = {'locationIsUser': 'yes',
+    self._config['main'] = {'modSavePref': ModSaveLocation.Auto.name,
                          'TTSLocation': '',
-                         'defaultSaveLocation': '',
-                         'firstRun': '0'}
+                         'firstRun': 'yes'}
     self._config.read(self._conffile, encoding='utf-8')
-    self._locationIsUser = self._config['main'].getboolean('locationIsUser')
+
+    validModSaveLocations = [e.name for e in ModSaveLocation]
+    location = self._config['main']['modSavePref']
+    self.modSavePref = location if location in validModSaveLocations else ModSaveLocation.Auto
     self._TTSLocation = self._config['main']['TTSLocation']
-    self._defaultSaveLocation = self._config['main']['defaultSaveLocation']
     self._firstRun = self._config['main'].getboolean('load_firstRun')
 
   def reset(self):
     super().reset()
-    os.unlink(self._conffile)
+    try:
+      os.unlink(self._conffile)
+    except FileNotFoundError:
+      pass
     self.__init__()
 
   def save(self):
     super().save()
     # Make sure all values have been createds
-    self._config['main']['locationIsUser'] = 'yes' if self._locationIsUser else 'no'
+    self._config['main']['modSavePref'] = self.modSavePref.name
     self._config['main']['TTSLocation'] = self._TTSLocation
-    self._config['main']['defaultSaveLocation'] = self._defaultSaveLocation
     self._config['main']['firstRun'] = 'yes' if self._firstRun else 'no'
     with open(self._conffile, 'w') as configfile:
       self._config.write(configfile)
 
 
 class PreferencesDialog(simpledialog.Dialog):
-  def applyLocationIsUser(*args):
-    args[0].preferences.locationIsUser=args[0].locationIsUser.get()
+  def applyModSavePref(*args):
+    args[0].preferences.ModSavePref=args[0].modPrefInt.get()
 
   def body(self,master):
     self.master=master
     self.preferences=Preferences()
     ttk.Label(master,text="Mod Save Location:").grid(row=0)
-    self.locationIsUser=Tk.BooleanVar()
+    self.modPrefInt=Tk.IntVar()
     ttk.Radiobutton(master,
                     text="Documents",
-                    variable=self.locationIsUser,
-                    value=True).grid(row=0,column=1)
+                    variable=self.modPrefInt,
+                    value=ModSaveLocation.Documents.value).grid(row=0,column=1)
     ttk.Radiobutton(master,
                     text="Game Data",
-                    variable=self.locationIsUser,
-                    value=False).grid(row=0,column=2)
-    self.locationIsUser.set(self.preferences.locationIsUser)
-    self.locationIsUser.trace("w",self.applyLocationIsUser)
+                    variable=self.modPrefInt,
+                    value=ModSaveLocation.GameData.value).grid(row=0,column=2)
+    ttk.Radiobutton(master,
+                    text="Auto",
+                    variable=self.modPrefInt,
+                    value=ModSaveLocation.Auto.value).grid(row=0,column=3)
+    self.modPrefInt.set(self.preferences.modSavePref)
+    self.modPrefInt.trace("w",self.applyModSavePref)
     ttk.Label(master,text="TTS Install location:").grid(row=1,columnspan=3)
     self.ttsLocationEntry=ttk.Entry(master)
     self.ttsLocationEntry.insert(0,self.preferences.TTSLocation)

@@ -80,7 +80,7 @@ class TTS_MANAGER:
 
   def download(self):
     if not self.save:
-      tts.logger().error("Internal error: self.save NULL when attempting to download")
+      tts.logger().warn("Internal error: self.save NULL when attempting to download")
       messagebox.showinfo("TTS Manager","Download failed (see log).")
       return
     if self.save.download():

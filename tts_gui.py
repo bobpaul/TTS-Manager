@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import tts
 import tkinter as Tk
 import tkinter.ttk as ttk

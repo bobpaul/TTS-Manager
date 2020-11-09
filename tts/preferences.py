@@ -220,26 +220,21 @@ class PreferencesLinux(Preferences):
 
 class PreferencesDialog(simpledialog.Dialog):
   def applyModSavePref(*args):
-    args[0].preferences.ModSavePref=args[0].modPrefInt.get()
+    args[0].preferences.modSavePref=args[0].modPrefInt.get()
 
   def body(self,master):
     self.master=master
     self.preferences=Preferences()
     ttk.Label(master,text="Mod Save Location:").grid(row=0)
     self.modPrefInt=Tk.IntVar()
-    ttk.Radiobutton(master,
-                    text="Documents",
-                    variable=self.modPrefInt,
-                    value=ModSaveLocation.Documents.value).grid(row=0,column=1)
-    ttk.Radiobutton(master,
-                    text="Game Data",
-                    variable=self.modPrefInt,
-                    value=ModSaveLocation.GameData.value).grid(row=0,column=2)
-    ttk.Radiobutton(master,
-                    text="Auto",
-                    variable=self.modPrefInt,
-                    value=ModSaveLocation.Auto.value).grid(row=0,column=3)
-    self.modPrefInt.set(self.preferences.modSavePref)
+    self.modPrefInt.set(self.preferences.modSavePref.value)
+    print(f'modpref is {self.preferences.modSavePref.name}, int is {self.modPrefInt.get()}')
+    for option in ModSaveLocation:
+      ttk.Radiobutton(master,
+                      text=option.name,
+                      variable=self.modPrefInt,
+                      value=int(option.value)
+                     ).grid(row=0,column=option.value+1)
     self.modPrefInt.trace("w",self.applyModSavePref)
     ttk.Label(master,text="TTS Install location:").grid(row=1,columnspan=3)
     self.ttsLocationEntry=ttk.Entry(master)

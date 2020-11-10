@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import tts
 import tkinter as Tk
 import tkinter.ttk as ttk
@@ -37,21 +38,12 @@ class TTS_MANAGER:
     ttk.Label(frame,text="Select list source:").grid(row=0,sticky=Tk.W)
     self.save_type=Tk.IntVar()
     self.save_type.set(int(tts.SaveType.workshop))
-    ttk.Radiobutton(frame,
-                   text="Workshop",
-                   variable=self.save_type,
-                   value=int(tts.SaveType.workshop),
-                   command=self.list_command).grid(row=0,column=1)
-    ttk.Radiobutton(frame,
-                   text="Save",
-                   variable=self.save_type,
-                   value=int(tts.SaveType.save),
-                   command=self.list_command).grid(row=0,column=2)
-    ttk.Radiobutton(frame,
-                   text="Chest",
-                   variable=self.save_type,
-                   value=int(tts.SaveType.chest),
-                   command=self.list_command).grid(row=0,column=3)
+    for option in tts.SaveType:
+      ttk.Radiobutton(frame,
+                     text=option.name.title(),
+                     variable=self.save_type,
+                     value=int(option.value),
+                     command=self.list_command).grid(row=0,column=option.value)
     fl_frame=ttk.Frame(frame)
     fl_frame.grid(row=1,columnspan=4,sticky=Tk.N+Tk.S+Tk.E+Tk.W)
     ttk.Label(fl_frame,text="Files found:").pack()
@@ -131,7 +123,8 @@ class TTS_MANAGER:
 
   def list_command(self):
     """ Populates the list box"""
-    data=tts.describe_files_by_type(self.filesystem,self.save_type.get())
+    save_type = tts.SaveType(self.save_type.get())
+    data=tts.describe_files_by_type(self.filesystem, save_type)
     self.file_list_box.config(state=Tk.NORMAL)
     self.file_list_box.delete(0,Tk.END)
     self.file_store={}

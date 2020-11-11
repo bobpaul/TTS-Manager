@@ -5,12 +5,12 @@ import tkinter.filedialog as filedialog
 import tkinter.messagebox as messagebox
 import tts
 import platform
+import os
 
 if platform.system() == 'Windows':
   import winreg
 else:
   import xdgappdirs
-  import os
   import configparser
 
 class Preferences(object):
@@ -50,6 +50,7 @@ class Preferences(object):
 
   @TTSLocation.setter
   def TTSLocation(self,value):
+    value = os.path.normpath(value)
     if self._TTSLocation==value:
       return
     self._TTSLocation=value
@@ -98,11 +99,11 @@ class Preferences(object):
     return tts.filesystem.FileSystem(tts_install_path=self.TTSLocation)
 
   def __str__(self):
-    return """Preferences:
-locationIsUser: {}
-TTSLocation: {}
-DefaultSaveLocation: {}
-firstRun: {}""".format(self.locationIsUser,self.TTSLocation,self.defaultSaveLocation,self.firstRun)
+    return f"""Preferences:
+locationIsUser: {self.locationIsUser}
+TTSLocation: {self.TTSLocation}
+DefaultSaveLocation: {self.defaultSaveLocation}
+firstRun: {self.firstRun}"""
 
 
 class PreferencesWin(Preferences):
@@ -110,13 +111,13 @@ class PreferencesWin(Preferences):
   def __init__(self):
     super().__init__()
     self._connection=winreg.ConnectRegistry(None,winreg.HKEY_CURRENT_USER)
-    self._registry=winreg.CreateKeyEx( self.connection, "Software\TTS Manager",0,winreg.KEY_ALL_ACCESS )
+    self._registry=winreg.CreateKeyEx( self._connection, "Software\TTS Manager",0,winreg.KEY_ALL_ACCESS )
     try:
       self._locationIsUser="True"==winreg.QueryValueEx(self._registry,"locationIsUser")[0]
     except FileNotFoundError as e:
       self._locationIsUser=True
     try:
-      self._TTSLocation=winreg.QueryValueEx(self._registry,"TTSLocation")[0]
+      self._TTSLocation=os.path.normpath( winreg.QueryValueEx(self._registry,"TTSLocation")[0] )
     except FileNotFoundError as e:
       self._TTSLocation=""
     try:
@@ -130,10 +131,10 @@ class PreferencesWin(Preferences):
 
   def reset(self):
     super().reset()
-    winreg.DeleteValue(self.registry,"locationIsUser")
-    winreg.DeleteValue(self.registry,"TTSLocation")
-    winreg.DeleteValue(self.registry,"defaultSaveLocation")
-    winreg.DeleteValue(self.registry,"firstRun")
+    winreg.DeleteValue(self._registry,"locationIsUser")
+    winreg.DeleteValue(self._registry,"TTSLocation")
+    winreg.DeleteValue(self._registry,"defaultSaveLocation")
+    winreg.DeleteValue(self._registry,"firstRun")
 
   def save(self):
     super().save()

@@ -118,9 +118,42 @@ def get_save_urls(savedata):
     return parse_dict(savedata)
   return set()
 
+class Mod:
+  def __init__(self, jsondata, jsonpath=None):
+    """ Initialize a new Mod object.
+
+      jsondata - str, Noneable- the contents of the mod's json to look at
+      jsonpath - str, path to json file to open.
+
+      One of jsondata or jsonpath must be falsey.
+    """
+
+    if jsonpath and not jsondata:
+      self.jsondata = json.load(jsonpath)
+      pass
+    elif jsondata and not jsonpath:
+      self._jsondata = jsondata
+    else:
+      self._jsondata = {}
+    #when jsondata is written
+
+    #can use file like objects to do things in memory. Maybe we can extract to a BytesIO
+    #https://stackoverflow.com/a/2463819
+    #file_like_object = io.BytesIO(my_zip_data)
+    # even easiser, just use the .read(name) method on a ZipFile object to extract 'name' into memory
 
 class Save:
   def __init__(self,savedata,filename,ident,filesystem,save_type=SaveType.workshop):
+    """ Initialize the save object
+       savedata - the mod data; eg the contents of the json file
+       filename - full path to the json file.
+       ident - mod id; eg the file basename without the extension
+       filesystem - "filesystem" object descring the mods dir
+       save_type - Workshop, Mod, or Chest
+
+     TODO: most of the required params are derivative. Only save_type, filesystem, and ident should be requied
+     TODO: refactor to parse the json data in its own object so it can come equally from zip or from file on filesystem. The object should map relative paths to download URLs
+    """
     log=tts.logger()
     self.data = savedata
     self.ident=ident

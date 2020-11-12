@@ -54,11 +54,20 @@ def load_json_file(filename):
   return j_data
 
 def load_file_by_type(ident,filesystem,save_type):
+  """load/parse the json file for a mod
+
+  ident - id of the mod (eg: the filename, excluding the extension)
+  save_type - the type of mod to load
+  """
+  assert isinstance(save_type, SaveType)
+  assert isinstance(filesystem, FileSystem)
   filename=filesystem.get_json_filename_for_type(ident,save_type)
   return load_json_file(filename)
 
 def describe_files_by_type(filesystem, save_type, sort_key=lambda mod: mod[0]):
-  """ filesystem - a filesystem object
+  """ Describes all mods of a given save type. Ex: all Chests
+
+      filesystem - a filesystem object; where to search for mods
       save_type - list only mods of type defined by SaveType enum
       sort_key - None or function for defining sort order. Defaults to sort by name
 
@@ -78,21 +87,21 @@ def download_file(filesystem,ident,save_type):
   """Attempt to download all files for a given savefile"""
   log=tts.logger()
   log.info("Downloading %s file %s (from %s)" % (save_type.name,ident,filesystem))
-  filename=filesystem.get_json_filename_for_type(ident,save_type)
-  if not filename:
+  jsonfilename=filesystem.get_json_filename_for_type(ident,save_type)
+  if not jsonfilename:
     log.error("Unable to find data file.")
     return False
   try:
-    data=load_json_file(filename)
+    data=load_json_file(jsonfilename)
   except IOError as e:
-    log.error("Unable to read data file %s (%s)" % (filename,e))
+    log.error("Unable to read data file %s (%s)" % (jsonfilename,e))
     return False
   if not data:
-    log.error("Unable to read data file %s" % filename)
+    log.error("Unable to read data file %s" % jsonfilename)
     return False
 
   save=tts.Save(savedata=data,
-            filename=filename,
+            filename=jsonfilename,
             ident=ident,
             save_type=save_type,
             filesystem=filesystem)

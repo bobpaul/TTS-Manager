@@ -4,38 +4,35 @@ import tts
 import zipfile
 import json as JSON
 import urllib.error
-from enum import Enum
 
 PAK_VER=2
 
-class AssetType(Enum):
-  MODEL = 'obj'
-  IMAGE = 'ext'
-  BUNDLE = 'unity3d'
-  PDF = 'PDF'
-
-def importPak(filesystem,filename):
+def importPak(filesystem, modarchive):
+  """
+  filesystem - filesystem object, used only for modpath and basepath (savespath)
+  modarchive - the pak file to import
+  """
   log=tts.logger()
-  log.debug("About to import {} into {}.".format(filename,filesystem))
-  if not os.path.isfile(filename):
-    log.error("Unable to find mod pak {}".format(filename))
+  log.debug(f"About to import {modarchive} into {filesystem}.")
+  if not os.path.isfile(modarchive):
+    log.error(f"Unable to find mod pak {modarchive}")
     return False
-  if not zipfile.is_zipfile(filename):
-    log.error("Mod pak {} format appears corrupt.".format(filename))
+  if not zipfile.is_zipfile(modarchive):
+    log.error(f"Mod pak {modarchive} format appears corrupt.")
     return False
   try:
-    with zipfile.ZipFile(filename,'r') as zf:
+    with zipfile.ZipFile(modarchive,'r') as zf:
       bad_file=zf.testzip()
       if bad_file:
-        log.error("At least one corrupt file found in {} - {}".format(filename,bad_file))
+        log.error("At least one corrupt file found in {} - {}".format(modarchive,bad_file))
         return False
       if not zf.comment:
         # TODO: allow overrider
-        log.error("Missing pak header comment in {}. Aborting import.".format(filename))
+        log.error("Missing pak header comment in {}. Aborting import.".format(modarchive))
         return False
       metadata=JSON.loads(zf.comment.decode('utf-8'))
       if not tts.validate_metadata(metadata, PAK_VER):
-        log.error(f"Invalid pak header '{metadata}' in {filename}. Aborting import.")
+        log.error(f"Invalid pak header '{metadata}' in {modarchive}. Aborting import.")
         return False
       log.info(f"Extracting {metadata['Type']} pak for id {metadata['Id']} (pak version {metadata['Ver']})")
 
@@ -76,54 +73,11 @@ def importPak(filesystem,filename):
             log.debug(f"Can't remove dir {outdir}")
 
   except zipfile.BadZipFile as e:
-    log.error("Mod pak {} format appears corrupt - {}.".format(filename,e))
+    log.error(f"Mod pak {modarchive} format appears corrupt - {e}.")
   except zipfile.LargeZipFile as e:
-    log.error("Mod pak {} requires large zip capability - {}.\nThis shouldn't happen - please raise a bug.".format(filename,e))
-  log.info("Imported {} successfully.".format(filename))
+    log.error(f"Mod pak {modarchive} requires large zip capability - {e}.\nThis shouldn't happen - please raise a bug.")
+  log.info(f"Imported {modarchive} successfully.")
   return True
-
-def get_save_urls(savedata):
-  '''
-  Iterate over all the values in the json file, building a (key,value) set of
-  all the values whose key ends in "URL"
-  '''
-  log=tts.logger()
-  def parse_list(data):
-    urls=set()
-    for item in data:
-      urls |= get_save_urls(item)
-    return urls
-  def parse_dict(data):
-    urls=set()
-    if not data:
-      return urls
-    for key in data:
-      if type(data[key]) is not str or key=='PageURL' or key=='Rules':
-        # If it isn't a string, it can't be an url.
-        # Also don't save tablet state / rulebooks
-        continue
-      if key.endswith('URL') and data[key]!='':
-        log.debug("Found {}:{}".format(key,data[key]))
-        urls.add(data[key])
-        continue
-      protocols=data[key].split('://')
-      if len(protocols)==1:
-        # not an url
-        continue
-      if protocols[0] in ['http','https','ftp']:
-        # belt + braces.
-        urls.add(data[key])
-        log.debug("Found {}:{}".format(key,data[key]))
-        continue
-    for item in data.values():
-      urls |= get_save_urls(item)
-    return urls
-
-  if type(savedata) is list:
-    return parse_list(savedata)
-  if type(savedata) is dict:
-    return parse_dict(savedata)
-  return set()
 
 class Mod:
   """ This represents the mod. Consumes json content or a json file and holds the list of URLs and relative file paths that make up the mod.
@@ -187,7 +141,8 @@ class Mod:
           with open(json, 'r') as jfile:
             self._jsondata = JSON.load(jfile)
         else:
-          log.error('json was not a file nor json data')
+          import ipdb; ipdb.set_trace()
+          log.error("Can't initialize Mod(). json was not a file nor json data")
           self._jsondata = {}
 
     if not fname and json and os.path.isfile(json):
@@ -381,7 +336,7 @@ class Mod:
     #  maybe https://pypi.org/project/jsoncomparison/
     return self.verify_list(zf.namelist(), everythingIsAModel)
 
-  def verify_path(self, modsFolder, modJson=None, modThumb=None, everythingIsAModel=False) -> [str, ]:
+  def verify_path(self, modsFolder, modJson=None) -> [str, ]:
     """Checks the folder contains all the necessary files for this mod
 
     modsFolder - path to the mods folder; this depends on Documents/GameData setting in TTS
@@ -394,7 +349,7 @@ class Mod:
     images = ['Mods/Images/' + image for root,dirs,images in os.walk(os.path.join(modsFolder,'Images')) for image in images]
     bundle = ['Mods/Assetbundles/' + bundle for root,dirs,bundles in os.walk(os.path.join(modsFolder,'Assetbundles')) for bundle in bundles]
     pdfs = ['Mods/PDF/' + pdf for root,dirs,pdfs in os.walk(os.path.join(modsFolder,'PDF')) for pdf in pdfs]
-    return self.verify_list(models+images+bundle+pdfs, everythingIsAModel)
+    return self.verify_list(models+images+bundle+pdfs)
 
   def verify_list(self, namelist, everythingIsAModel=False) -> [str, ]:
     """Given a relative list of file paths starting with 'Mods/', check to ensure all files
@@ -420,19 +375,19 @@ class Mod:
     for url,image in self.assetmap[AssetType.IMAGE].items():
       if image.split('.')[0] not in namelist:
         missing_images.append(url)
-        log.warn(f"Image: {url} is missing from archive")
+        log.warn(f"Missing Image: {url}")
       else:
         found += 1
-        log.info(f"Image: {url} found")
+        log.info(f"Image: {url}")
 
     missing_models=[]
     for url,model in self.assetmap[AssetType.MODEL].items():
       if model.split('.')[0] not in namelist:
         missing_models.append(url)
-        log.warn(f"Model: {url} is missing from archive")
+        log.warn(f"Missing Model: {url}")
       else:
         found += 1
-        log.info(f"Model: {url} found")
+        log.info(f"Model: {url}")
 
     missing_pdfs=[]
     for url,pdf in self.assetmap[AssetType.PDF].items():
@@ -440,10 +395,10 @@ class Mod:
         pdf = os.path.join(self.modelpath, os.path.basename(pdf))
       if pdf.split('.')[0] not in namelist:
         missing_pdfs.append(url)
-        log.warn(f"PDF: {url} is missing from archive")
+        log.warn(f"Missing PDF: {url}")
       else:
         found += 1
-        log.info(f"PDF: {url} found")
+        log.info(f"PDF: {url}")
 
     missing_bundles=[]
     for url,bundle in self.assetmap[AssetType.BUNDLE].items():
@@ -451,10 +406,10 @@ class Mod:
         bundle = os.path.join(self.modelpath, os.path.basename(bundle))
       if bundle.split('.')[0] not in namelist:
         missing_bundles.append(url)
-        log.warn(f"Assetbundle: {url} is missing from archive")
+        log.warn(f"Missing Assetbundle: {url}")
       else:
         found += 1
-        log.info(f"Assetbundle: {url} found")
+        log.info(f"Assetbundle: {url}")
 
     total = len(self.images()) + len(self.models()) + len(self.bundles()) + len(self.pdfs())
     missing += missing_images + missing_models + missing_pdfs + missing_bundles
@@ -466,11 +421,25 @@ class Mod:
       log.info(f"All items found {found} of {total} ({len(namelist)})")
     return missing
 
+  def __str__(self):
+    result = f"Save: {mod.name}\n"
+    if len(self.missing)>0:
+      result += "Missing:\n"
+      for x in self.missing:
+        result += str(x)+"\n"
+    if len(self.images)>0:
+      result += "Images:\n"
+      for x in self.images:
+        result += str(x)+"\n"
+    if len(self.models)>0:
+      result += "Models:\n"
+      for x in self.models:
+        result += str(x)+"\n"
+    return result
+
 class Save:
-  def __init__(self,savedata,filename,ident,filesystem,save_type=SaveType.workshop):
+  def __init__(self,ident,filesystem,save_type=SaveType.workshop):
     """ Initialize the save object
-       savedata - the mod data; eg the contents of the json file
-       filename - full path to the json file.
        ident - mod id; eg the file basename without the extension
        filesystem - "filesystem" object descring the mods dir
        save_type - Workshop, Mod, or Chest
@@ -479,32 +448,26 @@ class Save:
      TODO: refactor to parse the json data in its own object so it can come equally from zip or from file on filesystem. The object should map relative paths to download URLs
     """
     log=tts.logger()
-    self.data = savedata
-    self.ident=ident
-    if self.data['SaveName']:
-      self.save_name=self.data['SaveName']
-    else:
-      self.save_name=self.ident
-    self.save_type=save_type
+    self.filename = os.path.join(filesystem.get_dir_by_type(save_type), ident) + '.json'
+    self.mod = Mod(self.filename)
+    self.ident = ident
+    self.save_type = save_type
     self.filesystem = filesystem
-    self.filename=filename
-    thumbnail = os.path.extsep.join(filename.split(os.path.extsep)[0:-1] + ['png']) #Known issue: this fails if filename doesn't contain an extsep
+    thumbnail = os.path.extsep.join(self.filename.split(os.path.extsep)[0:-1] + ['png']) #Known issue: this fails if filename doesn't contain an extsep
     if os.path.isfile(thumbnail):
         self.thumbnail = thumbnail
     else:
         self.thumbnail = None
-    self.thumb=os.path.isfile(os.path.extsep.join([filename.split(os.path.extsep)[0],'png']))
-    #strip the local part off.
-    fileparts=self.filename.split(os.path.sep)
-    while fileparts[0]!='Saves' and fileparts[0]!='Mods':
-      fileparts=fileparts[1:]
-    self.basename=os.path.join(*fileparts)
-    log.debug("filename: {},save_name: {}, basename: {}".format(self.filename,self.save_name,self.basename))
-    self.urls = [ Url(url,self.filesystem) for url in get_save_urls(savedata) ]
-    self.missing = [ x for x in self.urls if not x.exists ]
-    self.images=[ x for x in self.urls if x.exists and x.isImage ]
-    self.models=[ x for x in self.urls if x.exists and not x.isImage ]
-    log.debug("Urls found {}:{} missing, {} models, {} images".format(len(self.urls),len(self.missing),len(self.models),len(self.images)))
+    self.thumb = os.path.isfile(os.path.extsep.join([self.filename.split(os.path.extsep)[0],'png']))
+
+    self.urls = [Url(url, self.filesystem, assettype) for assettype in self.mod.assetmap for url in self.mod.assetmap[assettype]]
+    typemap = {url:assettype for assettype in self.mod.assetmap for url in self.mod.assetmap[assettype]}
+    self.missing = [Url(url, self.filesystem, typemap[url]) for url in self.mod.verify_path(filesystem.mods_dir)]
+    self.images=[ x for x in self.urls if x.exists and x.assettype == tts.AssetType.IMAGE ]
+    self.models=[ x for x in self.urls if x.exists and x.assettype == tts.AssetType.MODEL ]
+    self.bundles=[ x for x in self.urls if x.exists and x.assettype == tts.AssetType.BUNDLE ]
+    self.pdfs=[ x for x in self.urls if x.exists and x.assettype == tts.AssetType.PDF ]
+    log.debug(f"Urls found {len(self.urls)}:{len(self.missing)} missing, {len(self.mod.models())} models, {len(self.mod.images())} images, {len(self.mod.bundles())} assetbundles, {len(self.mod.pdfs())} PDFs")
 
   def export(self,export_filename):
     log=tts.logger()
@@ -541,7 +504,7 @@ class Save:
 
   def download(self):
     log=tts.logger()
-    log.warn("About to download files for %s" % self.save_name)
+    log.warn("About to download files for %s" % self.mod.name)
     if self.isInstalled==True:
       log.info("All files already downloaded.")
       return True
@@ -549,7 +512,7 @@ class Save:
     successful=True
     url_counter=1
     for url in self.missing:
-      log.warn("Downloading file {} of {} for {}".format(url_counter,len(self.missing),self.save_name))
+      log.warn("Downloading file {} of {} for {}".format(url_counter,len(self.missing),self.mod.name))
       result = url.download()
       if not result:
         successful=False
@@ -563,7 +526,7 @@ class Save:
     return True
 
   def __str__(self):
-    result = "Save: %s\n" % self.data['SaveName']
+    result = f"Save: {self.mod.name}\n"
     if len(self.missing)>0:
       result += "Missing:\n"
       for x in self.missing:
@@ -576,5 +539,13 @@ class Save:
       result += "Models:\n"
       for x in self.models:
         result += str(x)+"\n"
+    if len(self.bundles)>0:
+      result += "Bundles:\n"
+      for x in self.bundles:
+        result += str(x)+"\n"
+    if len(self.pdfs)>0:
+      result += "PDFs:\n"
+      for x in self.pdfs:
+        result += str(x)+"\n"
     return result
-__all__ = [ 'Save' ]
+__all__ = [ 'Mod' ]

@@ -164,7 +164,7 @@ class TTS_CLI:
     if not data:
       self.list_installed()
       return
-    save=tts.Save(savedata=data,ident=ident,filename=filename,filesystem=self.filesystem)
+    save=tts.Save(ident=ident,filesystem=self.filesystem)
     return 0,save
 
   def do_download(self,args):
@@ -233,10 +233,9 @@ class TTS_CLI:
     data=tts.load_json_file(json_filename)
     if not data:
       return 1, "Unable to load data for file %s" % json_filename
+    #TODO we don't use filename or data anyway...
 
-    save=tts.Save(savedata=data,
-                  filename=json_filename,
-                  ident=args.id,
+    save=tts.Save(ident=args.id,
                   save_type=args.save_type,
                   filesystem=self.filesystem)
     if not save.isInstalled:

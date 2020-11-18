@@ -29,6 +29,8 @@ class FileSystem:
     self._mods  = os.path.join(self.modpath,"Mods")
     self._images= os.path.join(self._mods,"Images")
     self._models= os.path.join(self._mods,"Models")
+    self._bundles= os.path.join(self._mods,"Assetbundles")
+    self._pdfs= os.path.join(self._mods,"PDF")
     self._workshop = os.path.join(self._mods,"Workshop")
 
   def get_dir_by_type(self,save_type):
@@ -41,7 +43,7 @@ class FileSystem:
 
   def check_dirs(self):
     """Do all the directories exist?"""
-    for dir in [ self._saves, self._mods, self._images, self._models, self._workshop ]:
+    for dir in [ self._saves, self._mods, self._images, self._models, self._pdfs, self._bundles, self._workshop ]:
       if not os.path.isdir(dir):
         tts.logger().error("TTS Dir missing: {}".format(dir))
         return False
@@ -53,22 +55,38 @@ class FileSystem:
 
   def create_dirs(self):
     """Attempt to create any missing directories."""
-    for dir in [ self._saves, self._chest, self._mods, self._images, self._models, self._workshop ]:
+    for dir in [ self._saves, self._chest, self._mods, self._images, self._models, self._pdfs, self._bundles, self._workshop ]:
       os.makedirs(dir,exist_ok=True)
+
+  @property
+  def mods_dir(self):
+    return self._mods
 
   @property
   def saves_dir(self):
     return self._saves
 
   @property
+  def pdf_dir(self):
+    return self._pdfs
+
+  @property
+  def bundles_dir(self):
+    return self._bundles
+
+  @property
   def images_dir(self):
     return self._images
 
-  def get_image_path(self,filename):
-    return os.path.join(self._images,filename)
-
-  def get_model_path(self,filename):
-    return os.path.join(self._models,filename)
+  def get_asset_path(self,filename, assettype):
+    if assettype == tts.AssetType.IMAGE:
+      return os.path.join(self._images,filename)
+    elif assettype == tts.AssetType.MODEL:
+      return os.path.join(self._models,filename)
+    elif assettype == tts.AssetType.BUNDLE:
+      return os.path.join(self._bundles,filename)
+    elif assettype == tts.AssetType.PDF:
+      return os.path.join(self._pdfs,filename)
 
   def get_workshop_path(self,filename):
     return os.path.join(self._workshop,filename)
@@ -83,12 +101,27 @@ class FileSystem:
     return os.path.join(self.get_dir_by_type(save_type),filename)
 
   def find_details(self,basename):
+    """searched for a "basename" on disk to check which assettype it is
+    We already know this from parsing the json, so is this necessary??
+    This is only used by the Url class
+
+    basename - ?? just the file name of the asset I guess?
+
+    returns full path to file,AssetType
+        ... of course we know the relative path already from the json
+    """
     result=self.find_image(basename)
     if result:
-      return result,True
+      return result,tts.AssetType.IMAGE
     result=self.find_model(basename)
     if result:
-      return result,False
+      return result,tts.AssetType.MODEL
+    result=self.find_bundle(basename)
+    if result:
+      return result,tts.AssetType.BUNDLE
+    result=self.find_pdf(basename)
+    if result:
+      return result,tts.AssetType.PDF
     return None,None
 
   def find_image(self,basename):
@@ -104,8 +137,28 @@ class FileSystem:
   def find_model(self,basename):
     result=None
     stripname = tts.strip_filename(basename)
-    for model_format in ['.obj']:
+    for model_format in [tts.AssetType.MODEL.value]:
       filename=os.path.join(self._models,stripname+model_format)
+      if os.path.isfile(filename):
+        result=filename
+        break
+    return result
+  
+  def find_bundle(self,basename):
+    result=None
+    stripname = tts.strip_filename(basename)
+    for bundle_format in [tts.AssetType.BUNDLE.value]:
+      filename=os.path.join(self._bundles,stripname+bundle_format)
+      if os.path.isfile(filename):
+        result=filename
+        break
+    return result
+  
+  def find_pdf(self,basename):
+    result=None
+    stripname = tts.strip_filename(basename)
+    for pdf_format in [tts.AssetType.PDF.value]:
+      filename=os.path.join(self._pdfs, stripname+pdf_format)
       if os.path.isfile(filename):
         result=filename
         break
@@ -143,9 +196,15 @@ class FileSystem:
     return None
 
   def get_json_filename_from(self,basename,paths):
+    """searches paths to locate basename
+    basename - ?? just the filename, apparently without the extension
+    paths - list of full paths to test
+    
+    returns full path to first result
+    """
     result=None
-    for pth in paths:
-      filename=os.path.join(pth,basename+'.json')
+    for folder in paths:
+      filename=os.path.join(folder,basename+'.json')
       if os.path.isfile(filename):
         result=filename
         break
@@ -159,6 +218,11 @@ class FileSystem:
     return self.get_json_filename_from(basename,[self.get_dir_by_type(save_type)])
 
   def get_json_filename_type(self,basename):
+    """Given a "basename" determine what type of mod it is
+    basename - ?? just the filename, apparently without extension
+
+    return -> SaveType
+    """
     if os.path.isfile(os.path.join(self._workshop,basename+'.json')):
       return tts.SaveType.workshop
     if os.path.isfile(os.path.join(self._saves,basename+'.json')):

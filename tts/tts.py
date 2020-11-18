@@ -4,13 +4,19 @@ import json
 import tts.logger
 import tts.save
 import codecs
-from enum import IntEnum
+from enum import Enum,IntEnum
 from .filesystem import FileSystem,standard_basepath
 
 class SaveType(IntEnum):
   workshop = 1
   save = 2
   chest = 3
+
+class AssetType(Enum):
+  MODEL = 'obj'
+  IMAGE = 'various extensions'
+  BUNDLE = 'unity3d'
+  PDF = 'PDF'
 
 def get_default_fs():
   return FileSystem(standard_basepath())
@@ -87,22 +93,8 @@ def download_file(filesystem,ident,save_type):
   """Attempt to download all files for a given savefile"""
   log=tts.logger()
   log.info("Downloading %s file %s (from %s)" % (save_type.name,ident,filesystem))
-  jsonfilename=filesystem.get_json_filename_for_type(ident,save_type)
-  if not jsonfilename:
-    log.error("Unable to find data file.")
-    return False
-  try:
-    data=load_json_file(jsonfilename)
-  except IOError as e:
-    log.error("Unable to read data file %s (%s)" % (jsonfilename,e))
-    return False
-  if not data:
-    log.error("Unable to read data file %s" % jsonfilename)
-    return False
 
-  save=tts.Save(savedata=data,
-            filename=jsonfilename,
-            ident=ident,
+  save=tts.Save( ident=ident,
             save_type=save_type,
             filesystem=filesystem)
 
